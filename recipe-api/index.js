@@ -1,12 +1,11 @@
 import express from "express";
 import cors from "cors";
-
-//GPTSEVICE
 import { OpenAIApi, Configuration } from "openai";
-
-const API_KEY = "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";
+import { config } from "dotenv";
+config();
+const apiKey = process.env.API_KEY;
 const configuration = new Configuration({
-  apiKey: API_KEY,
+  apiKey: apiKey,
 });
 
 const openai = new OpenAIApi(configuration);
@@ -16,69 +15,87 @@ const port = 3001;
 app.use(cors());
 
 async function createGptRecipe(ingredients = [], specifications = "") {
-  const ingredientsText = ingredients.join(", ");
-  const prompt = `Create a recipe from these ingredients: ${ingredientsText}
-  Please provide in the following format - 
-  Name: 
-  Ingredients:
-  Instructions:
-  Servings: {number}
-  Prep Time: {number}
-  Cook Time: {number}
-  ${specifications}
-  if you can't comeup with a recipe for any reason return false
-  `;
-  return askGpt(prompt);
-}
-
-async function askGpt(prompt) {
-  const completion = await openai.createChatCompletion({
-    model: "gpt-3.5-turbo",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-  });
-
-  return completion.data.choices[0].message.content;
-}
-
-async function dalleImg(prompt) {
-  console.log(prompt);
-  if (prompt) {
-    const response = await openai.createImage({
-      prompt: prompt,
-      n: 1,
-      size: "256x256",
-    });
-    console.log("response.data[0].url", response.data.data[0].url);
-    return response.data.data[0].url;
+  try {
+    const ingredientsText = ingredients.join(", ");
+    const prompt = `Create a recipe from these ingredients: ${ingredientsText}
+    Please provide in the following format - 
+    Name: 
+    Ingredients:
+    Instructions:
+    Servings: {number}
+    Prep Time: {number}
+    Cook Time: {number}
+    ${specifications}
+    if you can't come up with a recipe for any reason return false
+    `;
+    return await askGpt(prompt);
+  } catch (error) {
+    console.error("Error in createGptRecipe:", error);
+    throw error;
   }
 }
 
-//dalleImg("pasta with bacon");
+async function askGpt(prompt) {
+  try {
+    const completion = await openai.createChatCompletion({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    return completion.data.choices[0].message.content;
+  } catch (error) {
+    console.error("Error in askGpt:", error);
+    throw error;
+  }
+}
+
+async function dalleImg(prompt) {
+  try {
+    if (prompt) {
+      const response = await openai.createImage({
+        prompt: prompt,
+        n: 1,
+        size: "256x256",
+      });
+
+      return response.data.data[0].url;
+    }
+  } catch (error) {
+    console.error("Error in dalleImg:", error);
+    throw error;
+  }
+}
 
 // Define the API route
 app.get("/getRecipe", async (req, res) => {
   const { ingredients, specifications } = req.query;
-  console.lop("/getRecipe speficiations", specifications);
-  const recipe = await createGptRecipe(ingredients, specifications);
-
-  res.json(recipe);
+  try {
+    const recipe = await createGptRecipe(ingredients, specifications);
+    res.json(recipe);
+  } catch (error) {
+    console.error("Error in /getRecipe:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 // API route for dalle
 app.get("/getImg", async (req, res) => {
   const prompt = req.query.image;
-  console.log(prompt);
-  const img = await dalleImg(prompt);
-  console.log("img", img);
-  res.json(img);
-});
 
-//example: http://localhost:3000/getRecipe?ingredients=bacon&ingredients=onion&ingredients=cauliflower
+  try {
+    const img = await dalleImg(prompt);
+
+    res.json(img);
+  } catch (error) {
+    console.error("Error in /getImg:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
